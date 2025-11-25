@@ -1,0 +1,406 @@
+---
+title: "Interpreting benchmarking results with BenchmarkInsights"
+date: 11/14/2025
+editor: visual
+execute:
+  keep-md: false  
+  cache: false   
+format:
+  html:
+    respect-user-color-scheme: true
+    # code-fold: true
+    embed-resources: true
+    toc: true
+    toc-location: right
+    theme: 
+      light: cosmo
+---
+
+```{=html}
+<style>
+.question {
+  padding: 1em 1.5em;
+  background: #e7f7ff; /* light cyan-blue */
+  border-left: 5px solid #0099cc;
+  border-radius: 10px;
+  margin: 1em 0;
+}
+
+.discussion {
+  padding: 1em 1.5em;
+  background: #ffe6ef; /* light pink */
+  border-left: 5px solid #e60073; /* darker pink for contrast */
+  border-radius: 10px;
+  margin: 1em 0;
+}
+</style>
+```
+**Presenting authors**
+
+Xiaoqi Cabiria Liang$^{1,2,3}$, Daniel Kim$^{1,2,3}$, Yue Cao$^{4}$
+
+**Contributors**
+
+Xiaoqi Cabiria Liang$^{1,2,3}$, Nicholas Robertson$^{1}$, Marni Torkel $^{1,2}$, Daniel Kim$^{1,2,3}$, Dario Strbenac$^{1,2}$, Yue Cao$^{4}$, Jean Yang$^{1,2}$.
+
+$^1$ Sydney Precision Data Science Centre, University of Sydney, Australia\
+$^2$ School of Mathematics and Statistics, University of Sydney, Australia\
+$^3$ Charles Perkins Centre, University of Sydney, Australia\
+$^4$ School of Information and Physical Sciences, The University of Newcastle, NSW 2308, Australia
+
+<br/> Contact: xiaoqi.liang\@sydney.edu.au
+
+```{r, warning=FALSE, error=FALSE, message=FALSE, include=FALSE}
+## library(devtools)
+## library(BiocManager)
+suppressMessages({
+  library(BenchHub) ## devtools::install_github("SydneyBioX/BenchHub")
+  library(readr)
+  library(dplyr)
+  library(stringr)
+  library(DT)
+})
+```
+
+# Overview
+
+::: panel-tabset
+## Our dataset
+
+In this workshop, we will work with a subset of benchmarking results from the SpatialSimBench study (https://doi.org/10.1186/s13059-025-03505-w). This dataset contains method performance scores across multiple simulation models, metrics, and dataset sizes, allowing us to explore trends, comparisons, and evaluation patterns using a variety of visual and statistical techniques.
+
+## Assumed knowledge
+
+-   Experience with R.
+-   Ability to install all required R packages, please check `sessionInfo` at the end of this document to ensure you are using the correct versions.
+-   Familiarity with fundamental concepts in data visualisation (e.g., boxplots, scatter plots) and simple statistical modelling.
+
+## Learning objectives
+
+-   Understand how to explore and summarise benchmark results across methods, datasets, and metrics.
+-   Interpret variability, correlation, and scalability patterns across different methods.
+-   Apply visual and statistical tools (boxplots, correlation plots, forest plots, scalability plots) to extract insights from benchmarking data.
+-   Build intuition for how evaluation metrics respond to method differences and how these patterns can inform method selection.
+:::
+
+::: question
+**Our question of interest**
+
+We want to build up build up data structure for storing benchmarking result and perform the workflow of analyzing benchmark result.
+:::
+
+# Part 0: Loading benchmarking result in R
+
+To begin, we will load the benchmark results into R and initialise a `BenchmarkInsights` object. This provides the foundation for all subsequent visualisations and analyses in this workshop.
+
+```{r, message=FALSE}
+result_path <- system.file("extdata", "spatialsimbench_result.csv", package = "BenchHub")
+spatialsimbench_result <- read_csv(result_path)
+DT::datatable(spatialsimbench_result)
+```
+
+::: panel-tabset
+### Build up BenchmarkInsights object
+
+A `BenchmarkInsights` object can be instantiated directly from a long-format dataframe. The dataframe must contain the following columns: `datasetID`, `method`, `evidence`, `metric`, and `result`.
+
+Below is an example showing how to initialise the object using evaluation results from the SpatialSimBench study:
+
+```{r}
+ssm_insight <- BenchmarkInsights$new(spatialsimbench_result)
+ssm_insight
+```
+
+### Add evaluation
+
+If you have additional evaluation result, you can use `addevalSummary()`. Here is the example:
+
+```{r echo = TRUE}
+add_result <- data.frame(
+  datasetID = rep("BREAST", 9),
+  method = c(
+    "scDesign2", "scDesign3_gau", "scDesign3_nb", "scDesign3_poi",
+    "SPARsim", "splatter", "SRTsim", "symsim", "zinbwave"
+  ),
+  evidence = rep("svg", 9),
+  metric = rep("recall", 9),
+  result = c(
+    0.921940928, 0.957805907, 0.964135021, 0.989451477, 0.774261603,
+    0.890295359, 0.985232068, 0.067510549, 0.888185654
+  ),
+  stringsAsFactors = FALSE
+)
+
+ssm_insight$addevalSummary(add_result)
+```
+
+### Add metadata
+
+If you add additional metadata of method, you can use `addMetadata()`. Here is the example:
+
+```{r echo = TRUE}
+metadata_srtsim <- data.frame(
+  method = "SRTsim",
+  year = 2023,
+  packageVersion = "0.99.6",
+  parameterSetting = "default",
+  spatialInfoReq = "No",
+  DOI = "10.1186/s13059-023-02879-z",
+  stringsAsFactors = FALSE
+)
+
+ssm_insight$addMetadata(metadata_srtsim)
+
+```
+:::
+
+# Part 1: Exploring the data
+
+## 1.1: Initial data exploration
+
+At the start of any analysis pipeline, it is helpful to explore the dataset to understand its structure, contents, and complexity.\
+
+Here, we use the `BenchmarkInsights` object to gain a high-level overview of the available datasets, methods, and evaluation metrics.
+
+::: question
+**Questions**
+
+1.  How many methods and datasets are there in the benchmark data?
+2.  How many evaluations are included in the benchmark?
+:::
+
+<br>
+
+::: panel-tabset
+### Datasets
+
+Here we extract the list of datasets included in the benchmark.
+
+```{r}
+unique(ssm_insight$evalSummary$datasetID)
+```
+
+### Methods
+
+Below is the list of methods whose performance has been evaluated.
+
+```{r}
+unique(ssm_insight$evalSummary$method)
+```
+
+### Evaluations
+
+Knowing how many entries are included helps us understand the size of the benchmark and the amount of information available for analysis.
+
+```{r}
+nrow(ssm_insight$evalSummary)
+```
+:::
+
+## 1.2: What do the benchmark task represent?
+
+To understand what is being evaluated, we can inspect the unique evidence–metric pairs used in the benchmark:
+
+```{r}
+DT::datatable(unique(ssm_insight$evalSummary[, c("evidence", "metric")]))
+```
+
+# Part 2: Interpretating the data
+
+In this section, we begin interpreting the benchmark results. Benchmark datasets often include many methods, metrics, and dataset scenarios, which can be overwhelming at first. To build intuition, we will explore the results step by step, starting with an overall summary and then examining variability, method similarity, scalability, and metric behaviour. Each subsection provides a different perspective to help us understand how methods perform and how the evaluation results are shaped.
+
+## 2.1 What’s in our benchmark?
+
+Imagine you’ve just finished benchmarking 13 methods across 10 datasets. You’ve got a lot of metrics: where do you even begin?
+
+::: question
+**Questions**
+
+1.  How should we even begin looking at the data?
+2.  Are there any immediate questions that we like to ask?
+3.  What is the best method?
+:::
+
+Before going into details, we can have a 20,000 foot view of the data, in another words, have an overview of the benchmark results by quick descriptive visuals. There are many options here but lets look at a popular way to summarise everything via a funky plot. This could be our first step.
+
+```{r }
+ssm_insight$getHeatmap(ssm_insight$evalSummary)
+```
+
+::: discussion
+**Discussion**
+
+1.  Are there any patterns that jump out at you?
+2.  How should I start looking at this diagram?
+3.  Do we see differences between different metrics?
+:::
+
+## 2.2 How does method variability differ across datasets for a specific metric?
+
+If we run the same method across many datasets for a given metric, do we get the same story? Or does a method perform well on some datasets but poorly on others?
+
+::: question
+**Questions**
+
+1.  Why do we care about variability across datasets?
+2.  Which methods are stable? Which one fluctuates a lot?
+3.  What does high variability mean for practical recommendations?
+:::
+
+This is important because methods often perform differently depending on the underlying characteristics of the data. Here we will explore this by focusing on a metric known as KDE statistics, which measures the similarity between two distributions. To explore this, we can visualise performance using a boxplot, where each box summarises how a method performs across all datasets under a chosen metric.
+
+This allows us to quickly see which methods are:
+
+-   robust (small spread, consistent performance), indicating that regardless of the differences in tissue type, data quality, or biological context, the method produces stable results 
+
+-   unstable (large spread, sensitive to dataset differences): Method performs very differently across datasets. It may work well for some datasets but poorly for others, how high sensitivity to dataset characteristics
+
+-   containing outliers suggesting dataset-specific failures.
+
+For this example, we focus on the metric KDEstat and supporting evidence scaledVar, and draw the following plot:
+
+```{r warning=FALSE}
+ssm_insight$getBoxplot(ssm_insight$evalSummary, metricVariable = "KDEstat",
+                       evidenceVariable = "scaledVar")
+```
+
+::: discussion
+**Discussion**
+
+1.  Which methods have the smallest spread (most stable)?
+2.  Which methods show most significant variability or extreme outliers?
+3.  Do the high-performing methods also appear stable?
+:::
+
+## 2.3 **Do the methods show similar patterns of performance?**
+
+If two methods yield similar results across many datasets, does this mean they have, in practical terms, the same impact; or at least the same impact when judged against a defined set of criteria? Is it important to know about this?
+
+::: question
+**Questions**
+
+1.  Why do we examine correlations between methods?
+2.  What does high or low correlation imply for method selection?
+:::
+
+When evaluating multiple methods across the same datasets, it is useful to assess whether they have, in practice, similar performance. Methods often cluster because they share modelling assumptions or statistical principles, which helps explain why some tend to succeed or fail together.   
+
+To identify similar methods, we examine the pairwise correlations of method performance across all datasets. This is best visualise via drawing a “correlation heatmap”
+
+```{r warning=FALSE}
+ssm_insight$getCorplot(ssm_insight$evalSummary, "method")
+```
+
+::: discussion
+**Discussion**
+
+1.  Which methods are highly correlated (almost interchangeable)?
+2.  Which methods show low correlation (different behaviour)?
+:::
+
+## 2.4 How does memory usage change as dataset size increases?
+
+As datasets grow larger, different methods may scale very differently. Some remain lightweight and efficient, while others become increasingly resource-heavy. Observing how memory usage changes with dataset size helps identify which methods are suitable for large-scale applications and which ones may become impractical.
+
+::: question
+**Questions**
+
+1.  Why do we examine memory usage across different dataset sizes?
+2.  Which methods scale well?
+3.  Which methods show sharp increases in memory consumption?
+:::
+
+Scalability is a key consideration when choosing methods, especially for high-throughput or large single-cell datasets. A method that performs well on small datasets may become impractical when memory usage grows quickly with dataset size. To explore this, we visualise memory usage across different gold-standard sizes using a line plot. Each line represents a method, showing how its memory footprint changes as the amount of input data increases. This plot helps us quickly identify:
+
+-   Stable methods: memory usage increases slowly, indicating good scalability.
+
+-   Steep-growth methods: memory demand rises sharply, suggesting potential bottlenecks for large datasets.
+
+-   Flat or minimal usage: computationally lightweight methods suitable for large-scale workloads.
+
+```{r warning=FALSE}
+ssm_insight$getLineplot(ssm_insight$evalSummary, metricVariable = "memory")
+```
+
+::: discussion
+**Discussion**
+
+1.  Which methods have the smallest slope (most memory-efficient)?
+2.  Which methods show noticeable memory increases?
+3.  Which methods stand out as outliers (very high memory consumption)?
+:::
+
+## 2.5 How do metrics relate to each other?
+
+Sometimes two metrics measure similar aspects of performance, while other times they reveal different strengths and weaknesses. Understanding how two metrics relate helps us identify trade-offs.
+
+::: question
+**Questions**
+
+1.  Do the two metrics agree on which methods perform well?
+2.  Are there clear trade-offs (e.g., methods with high recall but low precision)?
+3.  Which methods maintain a good balance between the two?
+:::
+
+To explore the relationship between two specific metrics, we use a scatter plot, where each point represents a method positioned by its values on the two metrics. This allows us to quickly see:
+
+-   Alignment: If points cluster along a diagonal, the two metrics tend to agree.
+
+-   Trade-offs:If some methods have high recall but low precision (or vice versa), this indicates metric-specific strengths.
+
+-   Outliers: Methods far from the main cluster may behave differently under the two metrics.
+
+```{r warning=FALSE}
+ssm_insight$getScatterplot(ssm_insight$evalSummary, c("recall", "precision"))
+```
+
+::: discussion
+**Discussion**
+
+1.  Which methods lie in the top-right (strong on both metrics)?
+2.  Which methods show a trade-off?
+:::
+
+## 2.6 How strong is the method affected under each metric?
+
+Different evaluation metrics capture different aspects of performance, and they do not always respond to methods in the same way. Some metrics give very similar scores across methods, making it difficult to see meaningful differences. Understanding how strongly each metric reacts to method differences helps us identify which metrics are more informative, and which ones are less sensitive to variation in method behaviour.
+
+::: question
+**Questions**
+
+1.  How can we tell which metrics show larger differences between methods?
+2.  Do some metrics exaggerate method differences while others compress them?
+3.  How do we compare the strength of the “method effect” across metrics?
+:::
+
+To examine how strongly each metric distinguishes between methods, we need a way to quantify how much a metric changes when we switch from one method to another. A simple way to do this is to fit a regression model for each metric separately. The idea is straightforward:
+
+-   The metric score is the outcome.
+
+-   The method is the explanatory factor.
+
+-   The model estimates how much the score shifts when moving from one method to another.
+
+In other words, the model tells us: “Under this metric, how big is the method-to-method difference?”
+
+Once we obtain these estimates, we visualise them using a forest plot. Each point on the plot shows the estimated effect of a method compared with the reference method, along with an uncertainty interval.
+
+This tells us:
+
+-   Metrics with large shifts → very sensitive; they highlight strong method differences
+
+-   Metrics with small shifts → more conservative; they treat methods similarly
+
+-   Metrics with wide uncertainty → less stable; conclusions vary more
+
+```{r warning=FALSE}
+ssm_insight$getForestplot(ssm_insight$evalSummary, "metric", "method")
+```
+
+::: discussion
+**Discussion**
+
+1.  Which metrics show the biggest method-to-method differences?
+2.  Do metrics agree on which methods perform best?
+3.  Are some methods only strong under specific metrics?
+:::
