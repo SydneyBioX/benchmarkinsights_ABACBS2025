@@ -16,13 +16,13 @@ It is expected that students will have:
 
 The expected timing of the workshop:
 
-| Activity           | Time            |
-|--------------------|-----------------|
-| Introduction       | 1:35pm - 1:50pm |
-| Exploring the data | 1:50pm - 2:00pm |
-| Break              | 2:00pm - 2:10pm |
-| Interpret the data | 2:10pm - 2:45pm |
-| Future work        | 2:45pm - 2:55pm |
+| Activity              | Time            |
+|-----------------------|-----------------|
+| Loading the data      | 1:35pm - 1:50pm |
+| Exploring the data    | 1:50pm - 2:00pm |
+| Break                 | 2:00pm - 2:10pm |
+| Interpreting the data | 2:10pm - 2:50pm |
+| Future work           | 2:50pm - 2:55pm |
 
 ### Learning objectives
 

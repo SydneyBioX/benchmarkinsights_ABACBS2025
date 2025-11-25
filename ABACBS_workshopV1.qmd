@@ -58,7 +58,9 @@ suppressMessages({
   library(readr)
   library(dplyr)
   library(stringr)
-  library(DT)
+  library(knitr)
+  library(kableExtra)
+  library(rmarkdown)
 })
 ```
 
@@ -96,8 +98,11 @@ To begin, we will load the benchmark results into R and initialise a `BenchmarkI
 ```{r, message=FALSE}
 result_path <- system.file("extdata", "spatialsimbench_result.csv", package = "BenchHub")
 spatialsimbench_result <- read_csv(result_path)
-DT::datatable(spatialsimbench_result)
+paged_table(spatialsimbench_result)
+
 ```
+
+<br>
 
 ::: panel-tabset
 ### Build up BenchmarkInsights object
@@ -172,6 +177,15 @@ Here, we use the `BenchmarkInsights` object to gain a high-level overview of the
 <br>
 
 ::: panel-tabset
+### Summary
+
+Here we extract the benchmark result from BenchmarkInsights object
+
+```{r}
+paged_table(head(ssm_insight$evalSummary))
+```
+
+
 ### Datasets
 
 Here we extract the list of datasets included in the benchmark.
@@ -202,7 +216,7 @@ nrow(ssm_insight$evalSummary)
 To understand what is being evaluated, we can inspect the unique evidence–metric pairs used in the benchmark:
 
 ```{r}
-DT::datatable(unique(ssm_insight$evalSummary[, c("evidence", "metric")]))
+paged_table(unique(ssm_insight$evalSummary[, c("evidence", "metric")]))
 ```
 
 # Part 2: Interpretating the data
@@ -272,7 +286,7 @@ ssm_insight$getBoxplot(ssm_insight$evalSummary, metricVariable = "KDEstat",
 3.  Do the high-performing methods also appear stable?
 :::
 
-## 2.3 **Do the methods show similar patterns of performance?**
+## 2.3 Do the methods show similar patterns of performance?
 
 If two methods yield similar results across many datasets, does this mean they have, in practical terms, the same impact; or at least the same impact when judged against a defined set of criteria? Is it important to know about this?
 
@@ -318,7 +332,7 @@ Scalability is a key consideration when choosing methods, especially for high-th
 
 -   Flat or minimal usage: computationally lightweight methods suitable for large-scale workloads.
 
-```{r warning=FALSE}
+```{r warning=FALSE, message=FALSE}
 ssm_insight$getLineplot(ssm_insight$evalSummary, metricVariable = "memory")
 ```
 
@@ -361,7 +375,7 @@ ssm_insight$getScatterplot(ssm_insight$evalSummary, c("recall", "precision"))
 2.  Which methods show a trade-off?
 :::
 
-## 2.6 How strong is the method affected under each metric?
+## 2.6 To what extent is the method sensitive to each metric?
 
 Different evaluation metrics capture different aspects of performance, and they do not always respond to methods in the same way. Some metrics give very similar scores across methods, making it difficult to see meaningful differences. Understanding how strongly each metric reacts to method differences helps us identify which metrics are more informative, and which ones are less sensitive to variation in method behaviour.
 
